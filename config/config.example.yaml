@@ -1,0 +1,25 @@
+# SOC-GPT Configuration
+# Copy to config.yaml and fill in your values. DO NOT commit config.yaml.
+
+wazuh:
+  manager_url: "https://your-wazuh-host:55000"
+  api_user: "wazuh-wui"
+  webhook_port: 8080
+
+llm:
+  providers:
+    - name: "ollama"
+      model: "llama3.2:3b"
+      base_url: "http://localhost:11434"
+    - name: "claude"
+      model: "claude-sonnet-4"
+      api_key_env: "ANTHROPIC_API_KEY"
+    - name: "openai"
+      model: "gpt-4o-mini"
+      api_key_env: "OPENAI_API_KEY"
+  consensus_threshold: 2
+
+triage:
+  auto_close_below: 30
+  escalate_above: 70
+  log_all_decisions: true
