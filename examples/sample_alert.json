@@ -1,0 +1,13 @@
+{
+  "alert_id": "ALT-2026-11-24-0001",
+  "timestamp": "2026-11-24T19:45:12Z",
+  "rule_id": "5712",
+  "rule_description": "SSHD authentication failed - multiple attempts",
+  "severity": 10,
+  "agent_name": "web-prod-01",
+  "agent_ip": "10.0.1.42",
+  "source_ip": "185.220.101.34",
+  "user_attempted": "root",
+  "raw_log": "Nov 24 19:45:12 web-prod-01 sshd[12481]: Failed password for root from 185.220.101.34 port 54321 ssh2",
+  "notes": "15 failed SSH attempts from same source IP in 60 seconds. Source IP is a known Tor exit node."
+}
