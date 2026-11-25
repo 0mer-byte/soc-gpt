@@ -1,9 +1,14 @@
 # SOC-GPT 2.0 — 6 Week Build Roadmap
 
-## Week 1 — Foundation (current)
+## Week 1 — Foundation ✅ COMPLETE
 - [x] Project scaffolding + repo
-- [ ] Local LLM (Ollama + Llama 3.2) running on dev machine
-- [ ] First working alert-triage code
+- [x] Local LLM (Ollama + Llama 3.2) running on dev machine
+- [x] First working alert-triage code
+- [x] FastAPI webhook server
+- [x] SQLite decision log
+- [x] Decision router with critical keyword safety guard
+- [x] 6 diverse sample alerts + batch runner
+- [x] Live HTML dashboard with charts and metrics
 - [ ] Wazuh VPS provisioning (pending DigitalOcean credit)
 - [ ] First real alerts from Wazuh webhook
 
