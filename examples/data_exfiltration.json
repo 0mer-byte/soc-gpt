@@ -1,0 +1,13 @@
+{
+  "alert_id": "ALT-2026-11-24-0005",
+  "timestamp": "2026-11-24T03:15:42Z",
+  "rule_id": "100205",
+  "rule_description": "Large outbound data transfer to external IP",
+  "severity": 12,
+  "agent_name": "db-prod-02",
+  "agent_ip": "10.0.2.18",
+  "source_ip": "185.91.127.14",
+  "user_attempted": "backup_svc",
+  "raw_log": "Nov 24 03:15:42 db-prod-02 netflow: 10.0.2.18 -> 185.91.127.14:443 bytes=12847291004 duration=187s",
+  "notes": "12.8GB upload to 185.91.127.14 (located in Bulgaria, not a known backup destination). Backup service account used. Outside normal backup window (02:00-02:30 UTC)."
+}

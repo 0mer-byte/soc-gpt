@@ -1,0 +1,13 @@
+{
+  "alert_id": "ALT-2026-11-24-0006",
+  "timestamp": "2026-11-24T02:08:15Z",
+  "rule_id": "31301",
+  "rule_description": "Scheduled backup job failed - disk space",
+  "severity": 4,
+  "agent_name": "backup-01",
+  "agent_ip": "10.0.4.5",
+  "source_ip": null,
+  "user_attempted": "root",
+  "raw_log": "Nov 24 02:08:15 backup-01 rsnapshot[8821]: ERROR: No space left on device: /mnt/backup/daily.0",
+  "notes": "Daily backup rotation failed because old snapshots not purged. Operational issue, not security. Needs ops team ticket to expand backup volume."
+}

@@ -1,0 +1,13 @@
+{
+  "alert_id": "ALT-2026-11-24-0003",
+  "timestamp": "2026-11-24T02:47:33Z",
+  "rule_id": "5402",
+  "rule_description": "Successful sudo to root by non-admin user",
+  "severity": 13,
+  "agent_name": "db-prod-02",
+  "agent_ip": "10.0.2.18",
+  "source_ip": null,
+  "user_attempted": "jenkins",
+  "raw_log": "Nov 24 02:47:33 db-prod-02 sudo: jenkins : TTY=pts/0 ; PWD=/var/lib/jenkins ; USER=root ; COMMAND=/bin/bash",
+  "notes": "'jenkins' is a CI service account that should NEVER run interactive shells. Activity at 2:47 AM outside maintenance window. User had no prior sudo history."
+}

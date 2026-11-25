@@ -1,0 +1,13 @@
+{
+  "alert_id": "ALT-2026-11-24-0002",
+  "timestamp": "2026-11-24T14:12:08Z",
+  "rule_id": "31101",
+  "rule_description": "Web server 200 response from internal subnet",
+  "severity": 2,
+  "agent_name": "web-prod-01",
+  "agent_ip": "10.0.1.42",
+  "source_ip": "10.0.5.117",
+  "user_attempted": null,
+  "raw_log": "10.0.5.117 - - [24/Nov/2026:14:12:08] \"GET /dashboard HTTP/1.1\" 200 4821",
+  "notes": "Internal user accessing dashboard during business hours. First-time source IP triggered rule, but IP is in corporate DHCP range."
+}
