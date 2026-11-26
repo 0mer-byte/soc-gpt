@@ -1,4 +1,4 @@
-"""FastAPI webhook server — receives security alerts and triages them."""
+"""FastAPI webhook server — receives security alerts and triages them via multi-LLM consensus."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -8,32 +8,35 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from src.core.consensus import ConsensusEngine
 from src.core.response import route_decision
 from src.core.storage import DecisionStore
+from src.llm.groq_provider import GroqProvider
 from src.llm.ollama_provider import OllamaProvider
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-llm: OllamaProvider | None = None
+engine: ConsensusEngine | None = None
 store: DecisionStore | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global llm, store
-    llm = OllamaProvider()
+    global engine, store
+    providers = [OllamaProvider(), GroqProvider()]
+    engine = ConsensusEngine(providers)
     store = DecisionStore()
     store.init_db()
-    logger.info("SOC-GPT ready — LLM=%s", llm.name)
+    logger.info("SOC-GPT ready — %s", engine.name)
     yield
     logger.info("SOC-GPT shutting down")
 
 
 app = FastAPI(
     title="SOC-GPT 2.0 API",
-    description="AI-powered SIEM alert triage",
-    version="0.1.0",
+    description="AI-powered SIEM alert triage with multi-LLM consensus voting",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -57,7 +60,7 @@ async def root():
     return {
         "service": "SOC-GPT 2.0",
         "status": "operational",
-        "llm": llm.name if llm else "not initialized",
+        "engine": engine.name if engine else "not initialized",
     }
 
 
@@ -70,7 +73,7 @@ async def health():
 async def receive_alert(alert: AlertWebhook):
     logger.info("Received alert %s: %s", alert.alert_id, alert.rule_description)
     alert_dict = alert.model_dump()
-    decision = await llm.analyze_alert(alert_dict)
+    decision = await engine.analyze_alert(alert_dict)
     action = route_decision(decision, rule_description=alert.rule_description)
     store.log_decision(
         alert_id=alert.alert_id,
@@ -81,7 +84,7 @@ async def receive_alert(alert: AlertWebhook):
         reasoning=decision.reasoning,
         recommended=decision.recommended_action,
         action_taken=action,
-        llm_name=llm.name,
+        llm_name=engine.name,
     )
     return {
         "alert_id": alert.alert_id,
@@ -128,14 +131,19 @@ h1 { font-size: 22px; font-weight: 600; }
 .card h2 { font-size: 14px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { text-align: left; padding: 10px 12px; background: #0b1120; color: #9ca3af; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid #1f2937; }
-td { padding: 12px; border-bottom: 1px solid #1f2937; }
+td { padding: 12px; border-bottom: 1px solid #1f2937; vertical-align: top; }
 tr:hover td { background: #0f1729; }
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
 .badge-malicious { background: #7f1d1d; color: #fecaca; }
 .badge-suspicious { background: #78350f; color: #fde68a; }
 .badge-benign { background: #064e3b; color: #a7f3d0; }
+.agreement { font-size: 10px; color: #6b7280; margin-top: 2px; }
+.agreement.unanimous { color: #10b981; }
+.agreement.split { color: #f59e0b; }
 .action { font-size: 12px; color: #9ca3af; }
 .action.override { color: #f59e0b; font-weight: 600; }
+.engine-info { background: #0f1729; border: 1px solid #1f2937; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #9ca3af; }
+.engine-info strong { color: #e5e7eb; }
 canvas { max-height: 260px; }
 footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 24px; }
 </style>
@@ -144,10 +152,13 @@ footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 24px; 
 <header>
     <div>
         <h1>&#128737; SOC-GPT 2.0 &mdash; Alert Triage Dashboard</h1>
-        <div class="subtitle">AI-powered security alert triage &middot; running on local Llama 3.2</div>
+        <div class="subtitle">Multi-LLM consensus triage &middot; local Ollama + Groq cloud</div>
     </div>
     <div class="status">LIVE</div>
 </header>
+<div class="engine-info">
+    <strong>Triage engine:</strong> <span id="engineName">loading...</span>
+</div>
 <div class="metrics" id="metrics"></div>
 <div class="grid">
     <div class="card">
@@ -170,10 +181,12 @@ footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 24px; 
 <script>
 let verdictChart, actionChart;
 async function fetchData() {
-    const [stats, decisions] = await Promise.all([
+    const [root, stats, decisions] = await Promise.all([
+        fetch('/').then(r => r.json()),
         fetch('/stats').then(r => r.json()),
         fetch('/decisions?limit=50').then(r => r.json()),
     ]);
+    document.getElementById('engineName').textContent = root.engine || 'unknown';
     renderMetrics(stats);
     renderVerdictChart(stats.by_verdict);
     renderActionChart(stats.by_action);
@@ -194,11 +207,7 @@ function renderMetrics(stats) {
         <div class="metric"><div class="metric-label">Avg Confidence</div><div class="metric-value">${avgConf}%</div></div>
     `;
 }
-function countMatching(dict, substr) {
-    let total = 0;
-    for (const [k, v] of Object.entries(dict || {})) if (k.includes(substr)) total += v;
-    return total;
-}
+function countMatching(dict, substr) { let total = 0; for (const [k, v] of Object.entries(dict || {})) if (k.includes(substr)) total += v; return total; }
 function pct(num, total) { return !total ? '0%' : Math.round(num / total * 100) + '% of total'; }
 function renderVerdictChart(byVerdict) {
     const labels = Object.keys(byVerdict || {});
@@ -232,7 +241,13 @@ function renderTable(decisions) {
         const time = new Date(d.triaged_at).toLocaleTimeString();
         const conf = Math.round(d.confidence * 100) + '%';
         const actionClass = d.action_taken.includes('OVERRIDE') ? 'action override' : 'action';
-        return `<tr><td style="color:#9ca3af">${time}</td><td>${esc(d.agent)}</td><td>${esc(d.rule)}</td><td><span class="badge badge-${d.verdict}">${d.verdict}</span></td><td>${conf}</td><td class="${actionClass}">${esc(d.action_taken)}</td></tr>`;
+        let agreement = '';
+        const agreementMatch = (d.reasoning || '').match(/^\\[(UNANIMOUS|MAJORITY|SPLIT)\\]/);
+        if (agreementMatch) {
+            const cls = agreementMatch[1].toLowerCase();
+            agreement = `<div class="agreement ${cls}">${agreementMatch[1]}</div>`;
+        }
+        return `<tr><td style="color:#9ca3af">${time}</td><td>${esc(d.agent)}</td><td>${esc(d.rule)}</td><td><span class="badge badge-${d.verdict}">${d.verdict}</span>${agreement}</td><td>${conf}</td><td class="${actionClass}">${esc(d.action_taken)}</td></tr>`;
     }).join('');
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
