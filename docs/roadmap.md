@@ -12,16 +12,19 @@
 - [ ] Wazuh VPS provisioning (pending DigitalOcean credit)
 - [ ] First real alerts from Wazuh webhook
 
-## Week 2 — Multi-LLM Voting
-- [ ] Claude provider implementation
-- [ ] OpenAI provider implementation
-- [ ] Consensus algorithm (majority vote across 3 LLMs)
-- [ ] Confidence scoring
+## Week 2 — Multi-LLM Voting ✅ COMPLETE (shipped Nov 25, Day 2)
+- [x] Groq provider (gpt-oss-120b, free tier, no credit card)
+- [x] Consensus engine with parallel LLM execution
+- [x] Majority vote with conservative tie-breaking
+- [x] Per-LLM agreement tags (UNANIMOUS / MAJORITY / SPLIT) on dashboard
+- [x] Accuracy improved from 2/6 to 6/6 correct verdicts
 
-## Week 3 — Decision Engine
-- [ ] Auto-close / escalate / respond routing
-- [ ] SQLite decision log
-- [ ] Alert deduplication
+## Week 3 — Enrichment Layer ✅ COMPLETE (shipped Nov 27, Day 4)
+- [x] AbuseIPDB integration (free tier, 1,000 checks/day)
+- [x] IP reputation feeds LLM prompt before triage
+- [x] Private IP skip logic (RFC 1918 ranges)
+- [x] Fail-safe design — API errors don't block triage
+- [ ] Future: VirusTotal for file hashes, GeoIP enrichment, MISP integration
 
 ## Week 4 — Auto-Response
 - [ ] IP blocking via UFW on Wazuh agents
@@ -39,3 +42,4 @@
 - [ ] 3-minute demo video
 - [ ] Case study writeup for portfolio
 - [ ] LinkedIn + resume update
+
