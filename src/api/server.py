@@ -1,4 +1,4 @@
-"""FastAPI webhook server — receives security alerts and triages them via multi-LLM consensus."""
+"""FastAPI webhook server — enriches alerts, then triages via multi-LLM consensus."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from src.core.consensus import ConsensusEngine
+from src.core.enrichment import EnrichmentService
 from src.core.response import route_decision
 from src.core.storage import DecisionStore
 from src.llm.groq_provider import GroqProvider
@@ -19,24 +20,26 @@ logger = logging.getLogger(__name__)
 
 engine: ConsensusEngine | None = None
 store: DecisionStore | None = None
+enrichment: EnrichmentService | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global engine, store
+    global engine, store, enrichment
     providers = [OllamaProvider(), GroqProvider()]
     engine = ConsensusEngine(providers)
     store = DecisionStore()
     store.init_db()
-    logger.info("SOC-GPT ready — %s", engine.name)
+    enrichment = EnrichmentService()
+    logger.info("SOC-GPT ready — %s + enrichment", engine.name)
     yield
     logger.info("SOC-GPT shutting down")
 
 
 app = FastAPI(
     title="SOC-GPT 2.0 API",
-    description="AI-powered SIEM alert triage with multi-LLM consensus voting",
-    version="0.2.0",
+    description="AI-powered SIEM alert triage with enrichment + multi-LLM consensus",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -61,6 +64,7 @@ async def root():
         "service": "SOC-GPT 2.0",
         "status": "operational",
         "engine": engine.name if engine else "not initialized",
+        "enrichment": "abuseipdb" if enrichment and enrichment.abuseipdb_key else "disabled",
     }
 
 
@@ -72,9 +76,29 @@ async def health():
 @app.post("/webhook/alert")
 async def receive_alert(alert: AlertWebhook):
     logger.info("Received alert %s: %s", alert.alert_id, alert.rule_description)
+
     alert_dict = alert.model_dump()
+
+    # 1. Enrich with external threat intel
+    enrichment_data = await enrichment.enrich(alert_dict)
+    alert_dict["enriched_data"] = {
+        "source": enrichment_data.source,
+        "summary": enrichment_data.summary(),
+        "abuse_score": enrichment_data.abuse_score,
+        "country": enrichment_data.country,
+        "usage_type": enrichment_data.usage_type,
+        "isp": enrichment_data.isp,
+        "total_reports": enrichment_data.total_reports,
+        "is_tor": enrichment_data.is_tor,
+    }
+    if enrichment_data.source != "none":
+        logger.info("Enriched %s with: %s", alert.source_ip, enrichment_data.summary())
+
+    # 2. Multi-LLM consensus triage (sees the enrichment)
     decision = await engine.analyze_alert(alert_dict)
     action = route_decision(decision, rule_description=alert.rule_description)
+
+    # 3. Persist
     store.log_decision(
         alert_id=alert.alert_id,
         agent=alert.agent_name,
@@ -86,12 +110,14 @@ async def receive_alert(alert: AlertWebhook):
         action_taken=action,
         llm_name=engine.name,
     )
+
     return {
         "alert_id": alert.alert_id,
         "verdict": decision.verdict,
         "confidence": decision.confidence,
         "reasoning": decision.reasoning,
         "action_taken": action,
+        "enrichment": enrichment_data.summary(),
     }
 
 
@@ -152,12 +178,12 @@ footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 24px; 
 <header>
     <div>
         <h1>&#128737; SOC-GPT 2.0 &mdash; Alert Triage Dashboard</h1>
-        <div class="subtitle">Multi-LLM consensus triage &middot; local Ollama + Groq cloud</div>
+        <div class="subtitle">Enrichment + multi-LLM consensus &middot; AbuseIPDB &middot; local Ollama + Groq cloud</div>
     </div>
     <div class="status">LIVE</div>
 </header>
 <div class="engine-info">
-    <strong>Triage engine:</strong> <span id="engineName">loading...</span>
+    <strong>Engine:</strong> <span id="engineName">loading...</span> &nbsp;&middot;&nbsp; <strong>Enrichment:</strong> <span id="enrichmentName">loading...</span>
 </div>
 <div class="metrics" id="metrics"></div>
 <div class="grid">
@@ -187,6 +213,7 @@ async function fetchData() {
         fetch('/decisions?limit=50').then(r => r.json()),
     ]);
     document.getElementById('engineName').textContent = root.engine || 'unknown';
+    document.getElementById('enrichmentName').textContent = root.enrichment || 'unknown';
     renderMetrics(stats);
     renderVerdictChart(stats.by_verdict);
     renderActionChart(stats.by_action);
@@ -261,5 +288,5 @@ setInterval(fetchData, 10000);
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    """Live HTML dashboard — stats, charts, recent decisions."""
+    """Live HTML dashboard."""
     return DASHBOARD_HTML
